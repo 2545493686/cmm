@@ -16,42 +16,58 @@ print(abs(i - 514));
 L_BNF
 ```
 # 起始
-语句    ->  函数定义
-        |  IF-分支 
-        |  变量定义语句
-        |  变量赋值定义语句
-        |  RETURN-语句
-        |  赋值语句
-        |  函数调用语句
+语句(STATEMENT) 
+        ->  函数定义    # id id ( id id
+        |  IF-分支       #* if 
+        |  变量定义语句     # id id ;
+        |  变量赋值定义语句 # id id =
+        |  RETURN-语句      # return
+        |  赋值语句         # id =
+        |  函数调用语句     # id ( id ,|)
 
-函数定义    ->  identifier identifier ( 参数 ) 块
+函数定义    ->  id id ( 参数 ) 块
 
-参数声明    -> identifier identifier
-            | 参数声明 , identifier identifier
+参数声明    -> id id
+            | 参数声明 , id id
 
 块  ->  { 语句集合 }
 
 语句集合    ->  语句
             |  语句集合 语句
 
-IF-分支 ->  if ( 值 ) 块
+IF-分支(IF) ->*  if ( 值 ) 块
 
-值  ->  integer
-    |   identifier
-    |   函数调用
+值(VALUE)   ->*  间接式
 
-函数调用    ->  identifier identifier ( 参数 )
+# 左递归的表达式
+间接式(IndirectExpr)   ->*  加减运算
 
-参数    ->  值
-        ->  参数 , 值
+加减运算(AddSub)   ->*  乘除运算 +|- 加减运算
+                    ->*  乘除运算
 
-变量定义语句    ->  identifier identifier ;
+乘除运算(MulDiv)   ->*  直接式 *|/ 乘除运算 
+                    ->*  直接式
 
-变量赋值定义语句    ->  identifier identifier = 值 ;
+# 非左递归的表达式
+直接式(DirectExpr) ->*  integer    
+                    |*   ( 值 )
+                    |*   - 值
+                    |*   函数调用    # id (
+                    |*   id
+
+
+函数调用(CALL)  ->*  id ( 参数 )
+
+参数    ->*  值
+        ->*  参数 , 值
+
+变量定义语句    ->  id id ;
+
+变量赋值定义语句    ->  id id = 值 ;
 
 RETURN-语句 ->  return 值 ;
 
-赋值语句    ->  identifier = 值 ;
+赋值语句    ->  id = 值 ;
 
 函数调用语句    ->  函数调用 ;
 

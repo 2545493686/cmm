@@ -3,7 +3,6 @@
 
 typedef enum 
 {
-    Token_EOF,
     Error,
     If, // if
     Return, // return

@@ -6,7 +6,7 @@ BUILD_SRC_DIR = $(BUILD_DIR)/src
 flex:
 	@mkdir -p $(BUILD_SRC_DIR)
 	@flex --outfile $(BUILD_SRC_DIR)/lex.yy.c cmm_flex.l
-	@gcc $(BUILD_SRC_DIR)/lex.yy.c -o $(BUILD_DIR)/cmm_flex -I$(INCLUDE_DIR)
+	@gcc $(BUILD_SRC_DIR)/lex.yy.c -g -o $(BUILD_DIR)/cmm_flex -I$(INCLUDE_DIR)
 
 flex_run: 
 	@make clean
@@ -22,7 +22,7 @@ flex_run:
 
 parser:
 	@mkdir -p $(BUILD_SRC_DIR)
-	@gcc cmm_parser.c -Wall -Werror -o $(BUILD_DIR)/cmm_parser -I$(INCLUDE_DIR) -L -lsc_array
+	@gcc cmm_parser.c -Wall -Werror -g -Og -o $(BUILD_DIR)/cmm_parser -I$(INCLUDE_DIR) -L -lsc_array
 	@echo "parser build success"
 
 parser_run:
