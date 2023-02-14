@@ -1,2 +1,13 @@
-# print("".join(["int abs(int value)\r\n{\r\nif (value < 0)\r\n{\r\nreturn -value;\r\n}\r\nreturn value;\r\n}\r\n\r\nint i = 114;\r\nprint(abs(i - 514));" for _ in range(0, 100000)]))
-print("int abs(int value)\r\n{\r\nif (value < 0)\r\n{\r\nreturn -value;\r\n}\r\nreturn value;\r\n}\r\n\r\nint i = 114;\r\nprint(abs(i - 514));")
+print('''
+int abs(int value)
+{
+    if (value < 0)
+    {
+        return -value;
+    }
+    return value;
+}
+
+int i = 114;
+print(abs(i - 514));
+''')

@@ -7,6 +7,7 @@ typedef enum
 {
     BlockGeneral,  // text是空，info1是一个语句*链表*
     StatementIf,   // text是空，info1是条件，第一个info2是条件成立时的块，TODO: 第二个info2是条件不成立时的块
+    StatementCall,   // text是空，info1是一个 ValueCall
     ValueInteger,  // text是整数
     ValueIdentifier,  // text是标识符
     ValueCall,     // text是函数名，info1是 Args*链表* 
@@ -16,12 +17,15 @@ typedef enum
     ValueSub,      // text是空，info1是左值，info2是右值
     ValueMul,      // text是空，info1是左值，info2是右值
     ValueDiv,      // text是空，info1是左值，info2是右值
+    ValueLess,      // text是空，info1是左值，info2是右值
+    ValueGreater,      // text是空，info1是左值，info2是右值
 } cmm_syntax_node_type;
 
 const char* cmm_syntax_node_type_alias[] = 
 {
     [BlockGeneral] = "block",
     [StatementIf] = "if",
+    [StatementCall] = "icall",
     [ValueInteger] = "int",
     [ValueIdentifier] = "id",
     [ValueCall] = "call",
@@ -31,6 +35,8 @@ const char* cmm_syntax_node_type_alias[] =
     [ValueSub] = "sub",
     [ValueMul] = "mul",
     [ValueDiv] = "div",
+    [ValueLess] = "<",
+    [ValueGreater] = ">",
 }; 
 
 #define GET_SYNTAX_NODE_ALIAS(type) (cmm_syntax_node_type_alias[type])
