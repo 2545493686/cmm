@@ -46,6 +46,61 @@ static const char *___last_pop_token_text;
     (void)sc_queue_del_first(tokens->texts);\
 }), ___last_pop_token_text)
 
+static void log_syntax_tree_debug_style(cmm_syntax_node *node, int tab_count)
+{
+    for (size_t i = 0; i < tab_count; i++)
+    {
+        printf("\t");
+    }
+    
+    if ((node->tags & ProgramBlock) != 0)
+    {
+        printf("{\n");
+        cmm_syntax_node *stmt = node->info1;
+        while (stmt != NULL)
+        {
+            log_syntax_tree_debug_style(stmt, tab_count + 1);
+            printf("\n");
+            stmt = stmt->next;
+        }
+        printf("}");
+        return;
+    }
+
+    printf("(%s ", GET_SYNTAX_NODE_ALIAS(node->type));
+    
+    if (node->value)
+    {
+        printf("%s ", node->value);
+    }
+    
+    cmm_syntax_node *info1 = node->info1;
+    if (!info1)
+    {
+        printf(". ");
+    }
+    while (info1 != NULL)
+    {
+        log_syntax_tree_debug_style(info1, 0);
+        printf(" ");
+        info1 = info1->next;
+    }
+
+    cmm_syntax_node *info2 = node->info2;
+    if (!info2)
+    {
+        printf(". ");
+    }
+    while (info2 != NULL)
+    {
+        log_syntax_tree_debug_style(info2, 0);
+        printf(" ");
+        info2 = info2->next;
+    }
+    
+    printf(")");
+}
+
 static cmm_syntax_node *pop_literal(token_quene *tokens, cmm_token_type test_type, cmm_syntax_node_type node_type)
 {
     cmm_syntax_node *node = (cmm_syntax_node *)malloc(sizeof(cmm_syntax_node));
@@ -91,7 +146,7 @@ static cmm_syntax_node *parse_args(token_quene *tokens)
 
 static cmm_syntax_node *parse_call(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(ValueCall, Value);
+    cmm_syntax_node *node = new_node(ValueCall, Value | Executable);
 
     node->value = test_and_pop_token(tokens, Identifier); // 函数名
     test_and_rm_token(tokens, LeftBracket); // (
@@ -205,7 +260,7 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
         test_and_rm_token(tokens, LessThan);
         cmm_syntax_node *node = new_node(ValueLess, Value);
         node->info1 = info1;
-        node->info2 = parse_expr_compare(tokens);
+        node->info2 = parse_expr_add_sub(tokens);
         return node;
     }
 
@@ -214,7 +269,7 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
         test_and_rm_token(tokens, GreaterThan);
         cmm_syntax_node *node = new_node(ValueGreater, Value);
         node->info1 = info1;
-        node->info2 = parse_expr_compare(tokens);
+        node->info2 = parse_expr_add_sub(tokens);
         return node;
     }
 
@@ -223,9 +278,25 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
     return info1;
 }
 
+static cmm_syntax_node *parse_assign(token_quene *tokens)
+{
+    cmm_syntax_node *info1 = parse_expr_compare(tokens);
+    
+    if (peek_type(tokens, 0) == Equal)
+    {
+        cmm_syntax_node *node = new_node(StatementAssign, Executable | Value);
+        node->info1 = info1;
+        test_and_rm_token(tokens, Equal);
+        node->info2 = parse_assign(tokens);
+        return node;
+    }
+    
+    return info1;
+}
+
 static cmm_syntax_node *parse_indirect_expr(token_quene *tokens)
 {
-    return parse_expr_compare(tokens);
+    return parse_assign(tokens);
 }
 
 static cmm_syntax_node *parse_value(token_quene *tokens)
@@ -273,10 +344,27 @@ static cmm_syntax_node *parse_if(token_quene *tokens)
     return node;
 }
 
-static cmm_syntax_node *parse_call_statement(token_quene *tokens)
+static cmm_syntax_node *parse_return(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(StatementCall, Executable);
-    node->info1 = parse_call(tokens);
+    cmm_syntax_node *node = new_node(StatementReturn, Executable);
+    test_and_rm_token(tokens, Return);
+    node->info1 = parse_value(tokens);
+    test_and_rm_token(tokens, EOL);
+    return node;
+}
+
+static cmm_syntax_node *parse_value_statement(token_quene *tokens)
+{
+    cmm_syntax_node *node = parse_value(tokens);
+
+    if ((node->tags & Executable) == 0)
+    {
+        printf("error: expr is not executable\n");
+        log_syntax_tree_debug_style(node, 0);
+        printf("\n");
+        assert(0);
+    }
+
     test_and_rm_token(tokens, EOL);
     return node;
 }
@@ -295,73 +383,20 @@ static cmm_syntax_node *parse_statement(token_quene *tokens)
         return parse_if(tokens);
     }
 
-    if (peek_type(tokens, 0) == Identifier)
+    if (peek_type(tokens, 0) == Return)
     {
-        if (peek_type(tokens, 1) == LeftBracket)
-        {
-            return parse_call_statement(tokens);
-        }
+        return parse_return(tokens);
     }
 
-    throw_error_token(tokens, -1);
-    assert(0);
+    // if (peek_type(tokens, 0) == Identifier)
+    // {
+        
+    // }
+
+    return parse_value_statement(tokens);
 }
 
-// TODO: 风格切换
-static void log_syntax_tree_debug_style(cmm_syntax_node *node, int tab_count)
-{
-    for (size_t i = 0; i < tab_count; i++)
-    {
-        printf("\t");
-    }
-    
-    if ((node->tags & ProgramBlock) != 0)
-    {
-        printf("{\n");
-        cmm_syntax_node *stmt = node->info1;
-        while (stmt != NULL)
-        {
-            log_syntax_tree_debug_style(stmt, tab_count + 1);
-            printf("\n");
-            stmt = stmt->next;
-        }
-        printf("}");
-        return;
-    }
 
-    printf("(%s ", GET_SYNTAX_NODE_ALIAS(node->type));
-    
-    if (node->value)
-    {
-        printf("%s ", node->value);
-    }
-    
-    cmm_syntax_node *info1 = node->info1;
-    if (!info1)
-    {
-        printf(". ");
-    }
-    while (info1 != NULL)
-    {
-        log_syntax_tree_debug_style(info1, 0);
-        printf(" ");
-        info1 = info1->next;
-    }
-
-    cmm_syntax_node *info2 = node->info2;
-    if (!info2)
-    {
-        printf(". ");
-    }
-    while (info2 != NULL)
-    {
-        log_syntax_tree_debug_style(info2, 0);
-        printf(" ");
-        info2 = info2->next;
-    }
-    
-    printf(")");
-}
 
 int main(int argc, char const *argv[])
 {

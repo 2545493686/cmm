@@ -3,6 +3,7 @@ input()
 print('''
 if (value < 0)
 {
-    print(114514);    
+    i = 5555;
+    print(114514 + i);    
 }
 ''')

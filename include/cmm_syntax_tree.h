@@ -7,7 +7,8 @@ typedef enum
 {
     BlockGeneral,  // text是空，info1是一个语句*链表*
     StatementIf,   // text是空，info1是条件，第一个info2是条件成立时的块，TODO: 第二个info2是条件不成立时的块
-    StatementCall,   // text是空，info1是一个 ValueCall
+    StatementReturn,   // text是空，info1是一个 Value
+    StatementAssign,   // text是空，info1是一个 Value，info2是一个 Value
     ValueInteger,  // text是整数
     ValueIdentifier,  // text是标识符
     ValueCall,     // text是函数名，info1是 Args*链表* 
@@ -25,7 +26,8 @@ const char* cmm_syntax_node_type_alias[] =
 {
     [BlockGeneral] = "block",
     [StatementIf] = "if",
-    [StatementCall] = "icall",
+    [StatementReturn] = "return",
+    [StatementAssign] = "=",
     [ValueInteger] = "int",
     [ValueIdentifier] = "id",
     [ValueCall] = "call",
