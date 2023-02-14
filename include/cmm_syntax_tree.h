@@ -9,6 +9,7 @@ typedef enum
     StatementIf,   // text是空，info1是条件，第一个info2是条件成立时的块，TODO: 第二个info2是条件不成立时的块
     StatementReturn,   // text是空，info1是一个 Value
     StatementAssign,   // text是空，info1是一个 Value，info2是一个 Value
+    StatementVarDef,    // text是变量名，info1是一个Id标志类型，info2是初值
     ValueInteger,  // text是整数
     ValueIdentifier,  // text是标识符
     ValueCall,     // text是函数名，info1是 Args*链表* 
@@ -39,6 +40,7 @@ const char* cmm_syntax_node_type_alias[] =
     [ValueDiv] = "div",
     [ValueLess] = "<",
     [ValueGreater] = ">",
+    [StatementVarDef] = "var",
 }; 
 
 #define GET_SYNTAX_NODE_ALIAS(type) (cmm_syntax_node_type_alias[type])

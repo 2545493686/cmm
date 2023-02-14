@@ -101,11 +101,20 @@ static void log_syntax_tree_debug_style(cmm_syntax_node *node, int tab_count)
     printf(")");
 }
 
-static cmm_syntax_node *pop_literal(token_quene *tokens, cmm_token_type test_type, cmm_syntax_node_type node_type)
+static cmm_syntax_node *new_node(cmm_syntax_node_type type, cmm_syntax_node_tag tags)
 {
     cmm_syntax_node *node = (cmm_syntax_node *)malloc(sizeof(cmm_syntax_node));
-    node->type = node_type;
-    node->tags = Value;
+    node->type = type;
+    node->tags = tags;
+    node->info1 = NULL;
+    node->info2 = NULL;
+    node->next = NULL;
+    return node;
+}
+
+static cmm_syntax_node *pop_literal(token_quene *tokens, cmm_token_type test_type, cmm_syntax_node_type node_type)
+{
+    cmm_syntax_node *node = new_node(node_type, Value);
     node->value = test_and_pop_token(tokens, test_type);
     return node;
 }
@@ -119,17 +128,6 @@ static cmm_token_type peek_type(token_quene *tokens, int index)
     }
 
     return (cmm_token_type)tokens->types->elems[tokens->types->first + index];
-}
-
-static cmm_syntax_node *new_node(cmm_syntax_node_type type, cmm_syntax_node_tag tags)
-{
-    cmm_syntax_node *node = (cmm_syntax_node *)malloc(sizeof(cmm_syntax_node));
-    node->type = type;
-    node->tags = tags;
-    node->info1 = NULL;
-    node->info2 = NULL;
-    node->next = NULL;
-    return node;
 }
 
 static cmm_syntax_node *parse_args(token_quene *tokens)
@@ -369,6 +367,22 @@ static cmm_syntax_node *parse_value_statement(token_quene *tokens)
     return node;
 }
 
+static cmm_syntax_node *parse_variable_def(token_quene *tokens)
+{
+    cmm_syntax_node *node = new_node(StatementVarDef, Executable);
+    node->info1 = pop_literal(tokens, Identifier, ValueIdentifier);
+    node->value = test_and_pop_token(tokens, Identifier);
+
+    if (peek_type(tokens, 0) == Equal)
+    {
+        test_and_rm_token(tokens, Equal);
+        node->info2 = parse_value(tokens);
+    }
+
+    test_and_rm_token(tokens, EOL);
+    return node;
+}
+
 // 分析一个语句
 static cmm_syntax_node *parse_statement(token_quene *tokens)
 {
@@ -388,10 +402,21 @@ static cmm_syntax_node *parse_statement(token_quene *tokens)
         return parse_return(tokens);
     }
 
-    // if (peek_type(tokens, 0) == Identifier)
-    // {
-        
-    // }
+    if (peek_type(tokens, 0) == Identifier)
+    {
+        if (peek_type(tokens, 1) == Identifier)
+        {
+            if (peek_type(tokens, 2) == EOL)
+            {
+                return parse_variable_def(tokens);
+            }
+
+            if (peek_type(tokens, 2) == Equal)
+            {
+                return parse_variable_def(tokens);
+            }
+        }
+    }
 
     return parse_value_statement(tokens);
 }

@@ -20,7 +20,7 @@ L_BNF
         |*  IF-分支       # if 
         |*  RETURN-语句      # return
         |  函数定义    # id id ( id id
-        |  变量定义语句     # id id ;
+        |*  变量定义语句     # id id ;
         |  变量赋值定义语句 # id id =
         |*  值语句           # value ;
 
