@@ -10,6 +10,8 @@ typedef enum
     StatementReturn,   // text是空，info1是一个 Value
     StatementAssign,   // text是空，info1是一个 Value，info2是一个 Value
     StatementVarDef,    // text是变量名，info1是一个Id标志类型，info2是初值
+    StatementFuncDef,    // text是变量名，第一个info1是一个Id标志返回值类型，剩下的info1是Args**链表**，info2是程序块
+    ArgsDef,   // text是参数名，第一个info1是类型
     ValueInteger,  // text是整数
     ValueIdentifier,  // text是标识符
     ValueCall,     // text是函数名，info1是 Args*链表* 
@@ -41,6 +43,8 @@ const char* cmm_syntax_node_type_alias[] =
     [ValueLess] = "<",
     [ValueGreater] = ">",
     [StatementVarDef] = "var",
+    [StatementFuncDef] = "func",
+    [ArgsDef] = "args",
 }; 
 
 #define GET_SYNTAX_NODE_ALIAS(type) (cmm_syntax_node_type_alias[type])
