@@ -1,7 +1,6 @@
 #if !defined(___CMM_PARSER_H)
 #define ___CMM_PARSER_H
 
-#include <stdio.h>
 #include <assert.h>
 #include "cmm_syntax_tree.h"
 #include "../lib/sc/queue/sc_queue.h"
@@ -17,7 +16,7 @@ typedef struct
 typedef struct
 {
     struct sc_queue_int *types;
-    struct sc_queue_str *texts;
+    struct sc_queue_ptr *texts;
 } token_quene;
 
 static cmm_syntax_node *parse_value(token_quene *tokens);

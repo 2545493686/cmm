@@ -1,22 +1,33 @@
+#include <stdarg.h>
+#include <stdio.h>
 #include "cmm_parser.h"
 
+#ifndef EOF
+#define EOF (-1)
+#endif
+
+#define printf __wrap_printf
 #define TOKEN_VALUE_LEN 32
+
+#define throw_error(...)\
+    __real_printf(__VA_ARGS__);\
+    assert(0);
 
 #define throw_error_token(tokens, target_token_type)\
 ({\
     if (target_token_type == -1)\
     {\
         printf("unexpect token %d %s\n", sc_queue_peek_first(tokens->types), \
-            sc_queue_peek_first(tokens->texts));\
+            (char *)sc_queue_peek_first(tokens->texts));\
     }\
     else\
     {\
         printf("expect token type %d, but got %d %s\n", target_token_type,  \
-            sc_queue_peek_first(tokens->types), sc_queue_peek_first(tokens->texts));\
+            sc_queue_peek_first(tokens->types), (char *)sc_queue_peek_first(tokens->texts));\
     }\
     for (int i = tokens->types->first; i < sc_queue_size(tokens->types); i++)\
     {\
-        printf("[%d - %s] ", tokens->types->elems[i], tokens->texts->elems[i]);\
+        printf("[%d - %s] ", tokens->types->elems[i], (char *)tokens->texts->elems[i]);\
     }\
     printf("\n");\
     assert(0);\
@@ -32,7 +43,7 @@
     (void)sc_queue_del_first(tokens->texts);\
 })
 
-static const char *___last_pop_token_text;
+static char *___last_pop_token_text;
 
 #define test_and_pop_token(tokens, target_token_type) \
 (({\
@@ -46,61 +57,30 @@ static const char *___last_pop_token_text;
     (void)sc_queue_del_first(tokens->texts);\
 }), ___last_pop_token_text)
 
-static void log_syntax_tree_debug_style(cmm_syntax_node *node, int tab_count)
+int verbose_log = 0;
+
+int __real_printf(const char *__fmt, ...)
 {
-    
-    if ((node->tags & ProgramBlock) != 0)
-    {
-        printf("{\n");
-        cmm_syntax_node *stmt = node->info1;
-        while (stmt != NULL)
-        {
-            for (size_t i = 0; i < tab_count + 1; i++)
-                printf("    ");
+    // 调用vprintf
+    va_list args;
+    va_start(args, __fmt);
+    int ret = vprintf(__fmt, args);
+    va_end(args);
+    return ret;
+}
 
-            log_syntax_tree_debug_style(stmt, tab_count + 1);
-            printf("\n");
-            stmt = stmt->next;
-        }
-        for (size_t i = 0; i < tab_count; i++)
-            printf("    ");
-
-        printf("}");
-        return;
-    }
-
-    printf("(%s ", GET_SYNTAX_NODE_ALIAS(node->type));
-    
-    if (node->value)
+int __wrap_printf(const char *__fmt, ...)
+{
+    if (verbose_log)
     {
-        printf("%s ", node->value);
+        // 调用vprintf
+        va_list args;
+        va_start(args, __fmt);
+        int ret = vprintf(__fmt, args);
+        va_end(args);
+        return ret;
     }
-    
-    cmm_syntax_node *info1 = node->info1;
-    if (!info1)
-    {
-        printf(". ");
-    }
-    while (info1 != NULL)
-    {
-        log_syntax_tree_debug_style(info1, tab_count);
-        printf(" ");
-        info1 = info1->next;
-    }
-
-    cmm_syntax_node *info2 = node->info2;
-    if (!info2)
-    {
-        printf(". ");
-    }
-    while (info2 != NULL)
-    {
-        log_syntax_tree_debug_style(info2, tab_count);
-        printf(" ");
-        info2 = info2->next;
-    }
-    
-    printf(")");
+    return 0;
 }
 
 static cmm_syntax_node *new_node(cmm_syntax_node_type type, cmm_syntax_node_tag tags)
@@ -125,8 +105,7 @@ static cmm_token_type peek_type(token_quene *tokens, int index)
 {
     if (sc_queue_size(tokens->types) < index)
     {
-        printf("error EOF\n");
-        assert(0);
+        throw_error("error EOF\n");
     }
 
     return (cmm_token_type)tokens->types->elems[tokens->types->first + index];
@@ -197,8 +176,7 @@ static cmm_syntax_node *parse_direct_expr(token_quene *tokens)
         return pop_literal(tokens, Identifier, ValueIdentifier);
     }
     
-    printf("unexpected token type: %d\n", peek_type(tokens, 0));
-    assert(0);
+    throw_error("unexpected token type: %d\n", peek_type(tokens, 0));
 }
 
 static cmm_syntax_node *parse_expr_mul_div(token_quene *tokens)
@@ -359,10 +337,9 @@ static cmm_syntax_node *parse_value_statement(token_quene *tokens)
 
     if ((node->tags & Executable) == 0)
     {
-        printf("error: expr is not executable\n");
-        log_syntax_tree_debug_style(node, 0);
+        cmm_syntax_tree_output_debug_style(node);
         printf("\n");
-        assert(0);
+        throw_error("error: expr is not executable\n")
     }
 
     test_and_rm_token(tokens, EOL);
@@ -417,8 +394,7 @@ static cmm_syntax_node *parse_statement(token_quene *tokens)
 {
     if (peek_type(tokens, 0) == EOF)
     {
-        printf("none input\n");
-        assert(0);
+        throw_error("none input\n");
     }
     
     if (peek_type(tokens, 0) == If)
@@ -455,13 +431,28 @@ static cmm_syntax_node *parse_statement(token_quene *tokens)
     return parse_value_statement(tokens);
 }
 
-
-
 int main(int argc, char const *argv[])
 {
+    enum {
+        NormalStyle = 0,
+        DebugStyle,
+    } style = NormalStyle;   // 0: normal, 1: debug
+
+    for (size_t i = 0; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-s=debug") == 0)
+        {
+            style = DebugStyle;
+        }
+        else if (strcmp(argv[i], "-v") == 0)
+        {
+            verbose_log = 1;
+        }
+    }
+
     // 读入输入，获取 Tokens
     struct sc_queue_int token_types;
-    struct sc_queue_str token_texts;
+    struct sc_queue_ptr token_texts;
 
 	sc_queue_init(&token_types);
     sc_queue_init(&token_texts); 
@@ -476,13 +467,11 @@ int main(int argc, char const *argv[])
         
         if (read_count <= 1)
         {
-            printf("Error: invalid value");
-            assert(0);
+            throw_error("Error: invalid value");
         }
         if (token_value[32] != '\0')
         {
-            printf("Error: value too long");
-            assert(0);
+            throw_error("Error: value too long");
         }
 
         sc_queue_add_last(&token_types, token_type);
@@ -493,7 +482,7 @@ int main(int argc, char const *argv[])
     }
 
     for (size_t i = 0; i < sc_queue_size(&token_types); i++) {
-		printf("[%d - %s] ", token_types.elems[i], token_texts.elems[i]);
+		printf("[%d - %s] ", token_types.elems[i], (char *)token_texts.elems[i]);
 	}
 
     printf("count: %ld\n", sc_queue_size(&token_types));    
@@ -509,7 +498,17 @@ int main(int argc, char const *argv[])
     while (peek_type(&token_quene, 0) != EOF)
     {
         cmm_syntax_node *node = parse_statement(&token_quene);
-        log_syntax_tree_debug_style(node, 0);
-        printf("\n");
+        switch (style)
+        {
+            case NormalStyle:
+                cmm_syntax_tree_output(node);
+                break;
+            case DebugStyle:
+                cmm_syntax_tree_output_debug_style(node);
+                break;
+            default:
+                throw_error("Error: unknown style %d", style);
+                break;
+        }
     }    
 }

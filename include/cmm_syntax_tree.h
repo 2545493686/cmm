@@ -66,4 +66,8 @@ typedef struct CmmSyntaxNode
     struct CmmSyntaxNode *next; // 为链表预留
 } cmm_syntax_node;
 
+void cmm_syntax_tree_output(cmm_syntax_node *node);
+cmm_syntax_node * cmm_syntax_tree_input();
+void cmm_syntax_tree_output_debug_style(cmm_syntax_node *node);
+
 #endif
