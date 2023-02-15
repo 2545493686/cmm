@@ -381,7 +381,7 @@ static cmm_syntax_node *parse_func_def(token_quene *tokens)
 {
     cmm_syntax_node *node = new_node(StatementFuncDef, Executable);
     node->info1 = pop_literal(tokens, Identifier, ValueIdentifier); // 返回值
-    node->value = test_and_pop_token(tokens, Identifier); // 参数名
+    node->value = test_and_pop_token(tokens, Identifier); // 函数名
     test_and_rm_token(tokens, LeftBracket);
     node->info1->next = parse_args_def(tokens);
     test_and_rm_token(tokens, RightBracket);

@@ -9,12 +9,12 @@ typedef enum
     StatementIf,   // text是空，info1是条件，第一个info2是条件成立时的块，TODO: 第二个info2是条件不成立时的块
     StatementReturn,   // text是空，info1是一个 Value
     StatementAssign,   // text是空，info1是一个 Value，info2是一个 Value
-    StatementVarDef,    // text是变量名，info1是一个Id标志类型，info2是初值
-    StatementFuncDef,    // text是变量名，第一个info1是一个Id标志返回值类型，剩下的info1是Args**链表**，info2是程序块
+    StatementVarDef,    // text是变量名，info1是一个Id标志类型，info2是初值（Value）
+    StatementFuncDef,    // text是函数名，第一个info1是一个Id标志返回值类型，剩下的info1是ArgsDef**链表**，info2是程序块
     ArgsDef,   // text是参数名，第一个info1是类型
     ValueInteger,  // text是整数
     ValueIdentifier,  // text是标识符
-    ValueCall,     // text是函数名，info1是 Args*链表* 
+    ValueCall,     // text是函数名，info1是 ValueArgs*链表* 
     ValueArgs,     // text是空，next是下一个参数，info1是一个值结点
     ValueNegate,   // text是空，info1是目标值
     ValueAdd,      // text是空，info1是左值，info2是右值

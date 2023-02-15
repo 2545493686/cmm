@@ -1,5 +1,5 @@
 print('''
-int abs(int value)
+dynamic abs(int value)
 {
     if (value < 0)
     {
