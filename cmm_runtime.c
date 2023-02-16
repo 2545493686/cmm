@@ -8,25 +8,26 @@
 
 //#region throw
 #define throw_on(test, node)\
-    if (test) \
+    if ((test)) \
     {\
-        cmm_syntax_tree_output_debug_style(node); \    
+        __real_printf("current node:\n");\
+        cmm_syntax_tree_output_debug_style((node)); \
         __real_printf(#test); \
         __real_printf(" is occur.");\
         assert(0);\
     }
 
 #define throw(node, ...)\
-    cmm_syntax_tree_output_debug_style(node); \
+    ({cmm_syntax_tree_output_debug_style((node)); \
     __real_printf(__VA_ARGS__); \
-    assert(0); 
+    assert(0);}) 
+
 //#endregion
 
-#define printf __wrap_printf
-
-static const cmm_value Void = { .type = CmmBaseType_Void, .value_ptr = NULL };
-static struct sc_map_sv *builtin_func; //name-value_handler pairs
 static int verbose_log = 1;
+
+//#region wrap printf
+#define printf __wrap_printf
 
 static int __real_printf(const char *__fmt, ...)
 {
@@ -51,12 +52,49 @@ static int __wrap_printf(const char *__fmt, ...)
     }
     return 0;
 }
+//#endregion
+
+static cmm_value Void = { .type = CmmBaseType_Void, .value_ptr = NULL };
+static struct sc_map_sv *builtin_func; //name-value_handler pairs
 
 static runtime_context * new_context()
 {
     runtime_context *context = (runtime_context *)malloc(sizeof(runtime_context));
     sc_map_init_sv(&context->values, 0, 0);
+    context->last = NULL;
+    context->managed = NULL;
     return context;
+}
+
+static void free_context(runtime_context *context, cmm_value *ret)
+{
+    const char *key;
+	void *value;
+    sc_map_foreach (&context->values, key, value) 
+    {
+        if (value != ret)
+        {
+            free(((cmm_value *)value)->value_ptr);
+            free(value);
+        }
+	}
+
+    sc_map_term_sv(&context->values);
+
+    managed_value *managed = context->managed;
+    while (managed != NULL)
+    {
+        managed_value *item = managed;
+        managed = managed->next;
+        if (item->value != ret)
+        {
+            free(item->value->value_ptr);
+            free(item->value);
+        }
+        free(item);
+    }
+
+    free(context);
 }
 
 static cmm_value * get_context_value(runtime_context *context, char *key)
@@ -75,6 +113,14 @@ static cmm_value * get_context_value(runtime_context *context, char *key)
     return NULL;
 }
 
+static void add_managed_value(runtime_context *context, cmm_value *value)
+{
+    managed_value *managed = (managed_value *)malloc(sizeof(managed_value));
+    managed->value = value;
+    managed->next = context->managed;
+    context->managed = managed->next;
+}
+
 static cmm_value * get_int(cmm_syntax_node *node, runtime_context *context)
 {
     throw_on(node->type != ValueInteger, node);
@@ -85,6 +131,8 @@ static cmm_value * get_int(cmm_syntax_node *node, runtime_context *context)
     int32_t *i32 = (int32_t *)malloc(sizeof(int32_t));
     *i32 = atoi(node->value);
     value->value_ptr = (void *)i32;
+
+    add_managed_value(context, value);
 
     return value;
 }
@@ -101,8 +149,25 @@ static cmm_value * get_identifier(cmm_syntax_node *node, runtime_context *contex
 
 static cmm_value * get_from_block(cmm_syntax_node *node, runtime_context *context)
 {
-    // TODO: 执行直到遇到 return
+    throw_on(node->type != BlockGeneral, node);
     
+    cmm_syntax_node *statement = node->info1;
+
+    while (statement != NULL)
+    {
+        cmm_value *value = get_value(statement, context);
+
+        if (value->type == CmmBaseType_Return)
+        {
+            cmm_value *ret = (cmm_value *)value->value_ptr;
+            free(value);
+            return ret;
+        }
+
+        statement = statement->next;
+    }
+    
+    return &Void;
 }
 
 static cmm_value * get_from_builtin_call(cmm_syntax_node *node, runtime_context *context)
@@ -128,6 +193,11 @@ static cmm_value * get_from_call(cmm_syntax_node *node, runtime_context *context
         return get_from_builtin_call(node, context);
     }
 
+    if (func_value->type != CmmBaseType_Func)
+    {
+        throw(node, "syntax error: %s is not a function.", node->value);
+    }
+
     cmm_func *func = (cmm_func *)func_value->value_ptr;
     cmm_syntax_node *func_def = func->func_def;
     cmm_syntax_node *args_def = func_def->info1->next;
@@ -140,50 +210,109 @@ static cmm_value * get_from_call(cmm_syntax_node *node, runtime_context *context
     while (param_node != NULL)
     {
         cmm_value *param_value = get_value(param_node->info1, context);
-        sc_map_put_sv(&sub_context->values, args_def->info1->value, param_value);
+        sc_map_put_sv(&sub_context->values, args_def->value, param_value);
         param_node = param_node->next;
         args_def = args_def->next;
     }
 
     cmm_value *ret = get_from_block(func_def->info2, sub_context);
 
-    char *key;
-	void *value;
-    sc_map_foreach (&sub_context->values, key, value) {
-		free(value);
-	}
-
-    sc_map_term_sv(&sub_context->values);
-
-    free(sub_context);
+    add_managed_value(context, ret);
+    free_context(sub_context, ret);
 
     return ret;
 }
 
-static value_handler value_handlers[] = {
-    [ValueInteger] = get_int,
-    [ValueIdentifier] = get_identifier,
-};
-
-static cmm_value * get_value(cmm_syntax_node *node, runtime_context *context)
+static cmm_value * get_negate(cmm_syntax_node *node, runtime_context *context)
 {
-    if (node == NULL)
+    throw_on(node->type != ValueNegate, node);
+
+    cmm_value *value = get_value(node->info1, context);
+
+    if (value->type != CmmBaseType_Int)
     {
-        return &Void;
+        throw(node, "syntax error: negate only support int.");
     }
 
-    throw_on((node->tags % Value) == 0, node);    
+    int32_t *i32 = (int32_t *)value->value_ptr;
+    *i32 = -*i32;
 
-    value_handler handler = value_handlers[node->type];
-    if (handler == NULL)
-    {
-        throw(node, "syntax error: %s is not implemented.", GET_SYNTAX_NODE_ALIAS(node->type));
-    }
-
-    return handler(node, context);
+    return value;
 }
 
-static void run_func_def(cmm_syntax_node *node, runtime_context *context)
+static cmm_value * int_binary_operator(cmm_syntax_node *node, cmm_value *value1, cmm_value *value2)
+{
+    int32_t *i32_1 = (int32_t *)value1->value_ptr;
+    int32_t *i32_2 = (int32_t *)value2->value_ptr;
+
+    int32_t *i32 = (int32_t *)malloc(sizeof(int32_t));
+
+    switch(node->type)
+    {
+        case ValueAdd:
+            *i32 = *i32_1 + *i32_2;
+            break;
+        case ValueSub:
+            *i32 = *i32_1 - *i32_2;
+            break;
+        case ValueMul:
+            *i32 = *i32_1 * *i32_2;
+            break;
+        case ValueDiv:
+            *i32 = *i32_1 / *i32_2;
+            break;
+        case ValueLess:
+            *i32 = *i32_1 < *i32_2;
+            break;
+        case ValueGreater:
+            *i32 = *i32_1 > *i32_2;
+            break;
+        default:
+            throw(node, "syntax error: int binary operator only support +, -, *, /, <, >.");
+    }
+
+    cmm_value *ret = (cmm_value *)malloc(sizeof(cmm_value));
+    ret->type = CmmBaseType_Int;
+    ret->value_ptr = (void *)i32;
+
+    return ret;
+}   
+
+static cmm_value * get_binary_operator(cmm_syntax_node *node, runtime_context *context)
+{
+    cmm_value *value1 = get_value(node->info1, context);
+    cmm_value *value2 = get_value(node->info2, context);
+
+    if (value1->type != CmmBaseType_Int || value2->type != CmmBaseType_Int)
+    {
+        throw(node, "syntax error: add only support int.");
+    }
+
+    cmm_value *ret = int_binary_operator(node, value1, value2);
+    add_managed_value(context, ret);
+
+    return ret;
+}
+
+static cmm_value * get_assign(cmm_syntax_node *node, runtime_context *context)
+{
+    throw_on(node->type != StatementAssign, node);
+
+    if (node->info1->type != ValueIdentifier)
+    {
+        throw(node, "syntax error: assign only support identifier.");
+    }
+
+    cmm_value *value = get_value(node->info2, context);
+
+    sc_map_put_sv(&context->values, node->info1->value, value);
+
+    return value;
+}
+
+
+
+static cmm_value * get_func_def(cmm_syntax_node *node, runtime_context *context)
 {
     throw_on(node->type != StatementFuncDef, node);
 
@@ -195,35 +324,128 @@ static void run_func_def(cmm_syntax_node *node, runtime_context *context)
     value->value_ptr = func;
 
     sc_map_put_sv(&context->values, node->value, value);
+
+    return &Void;
 }
 
-static void run_var_def(cmm_syntax_node *node, runtime_context *context)
+static cmm_value * get_var_def(cmm_syntax_node *node, runtime_context *context)
 {
     throw_on(node->type != StatementVarDef, node);
 
-    // TODO: 设置初值
     sc_map_put_sv(&context->values, node->value, get_value(node->info2, context));
+
+    return &Void;
 }
 
-static executable_handler executable_handlers[] = {
-    [StatementFuncDef] = run_func_def,
-    [StatementVarDef] = run_var_def,
-};
-
-static int run_executable(cmm_syntax_node *node, runtime_context *context)
+static cmm_value * get_if(cmm_syntax_node *node, runtime_context *context)
 {
-    if ((node->tags & Executable) == 0)
+    throw_on(node->type != StatementIf, node);
+
+    cmm_value *value = get_value(node->info1, context);
+    if (value->type != CmmBaseType_Int)
     {
-        throw(node, "syntax error: %s is not executable.", GET_SYNTAX_NODE_ALIAS(node->type));
+        throw(node, "syntax error: if condition only support int.");
     }
 
-    executable_handler handler = executable_handlers[node->type];
-    if (handler == NULL)
+    cmm_value *ret_from_block = &Void;
+    int32_t *i32 = (int32_t *)value->value_ptr;
+    if (*i32 != 0)
     {
-        throw(node, "syntax error: %s is not implemented.", GET_SYNTAX_NODE_ALIAS(node->type));
+        // FIXME: sub_context
+        ret_from_block = get_from_block(node->info2, context);
     }
-    
-    handler(node, context);
+    else
+    {
+        // TODO: 条件不成立
+        // run_executable(node->info2->next, context);
+    }
+
+    if (ret_from_block == &Void)
+    {
+        return ret_from_block;
+    }
+    else
+    {
+        cmm_value *ret = (cmm_value *)malloc(sizeof(cmm_value));
+        ret->type = CmmBaseType_Return;
+        ret->value_ptr = ret_from_block;
+        return ret;
+    }
+}
+
+static cmm_value * get_return(cmm_syntax_node *node, runtime_context *context)
+{
+    throw_on(node->type != StatementReturn, node);
+
+    cmm_value *value = get_value(node->info1, context);
+
+    cmm_value *ret = (cmm_value *)malloc(sizeof(cmm_value));  // 不用托管，在块得到时free
+    ret->type = CmmBaseType_Return;
+    ret->value_ptr = value;
+    return ret;
+}
+
+static cmm_value * get_value(cmm_syntax_node *node, runtime_context *context)
+{
+    if (node == NULL)
+    {
+        return &Void;
+    }
+
+    value_handler handler = NULL;
+
+    switch(node->type)
+    {
+        case ValueInteger:
+            handler = get_int;
+            break;
+        case ValueIdentifier:
+            handler = get_identifier;
+            break;
+        case ValueNegate:
+            handler = get_negate;
+            break;  
+        case ValueAdd:
+            handler = get_binary_operator;
+            break;
+        case ValueSub:
+            handler = get_binary_operator;
+            break;
+        case ValueMul:
+            handler = get_binary_operator;
+            break;
+        case ValueDiv:
+            handler = get_binary_operator;
+            break;
+        case ValueLess:
+            handler = get_binary_operator;
+            break;
+        case ValueGreater:
+            handler = get_binary_operator;
+            break;
+        case ValueCall:
+            handler = get_from_call;
+            break;
+        case StatementAssign:
+            handler = get_assign;
+            break;
+        case StatementFuncDef:
+            handler = get_func_def;
+            break;
+        case StatementVarDef:
+            handler = get_var_def;
+            break;
+        case StatementIf:
+            handler = get_if;
+            break;
+        case StatementReturn:
+            handler = get_return;
+            break;
+        default:
+            throw(node, "syntax error: %s is not implemented.", GET_SYNTAX_NODE_ALIAS(node->type));
+    }
+
+    return handler(node, context);
 }
 
 cmm_value * builtin_print(cmm_syntax_node *node, runtime_context *context)
@@ -272,7 +494,17 @@ int main(int argc, char const *argv[])
     cmm_syntax_node *node = NULL;
     while ((node = cmm_syntax_tree_input()) != NULL)
     {
-        parse_statement(node, context);
+        cmm_value *value = get_value(node, context);
+        if (value->type == CmmBaseType_Return)
+        {
+            break;
+        }
+        if (value->type !=CmmBaseType_Void)
+        {
+            free(value->value_ptr);
+            free(value);
+            free_syntax_node(node);
+        }
     }
 
     return 0;

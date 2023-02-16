@@ -83,20 +83,9 @@ int __wrap_printf(const char *__fmt, ...)
     return 0;
 }
 
-static cmm_syntax_node *new_node(cmm_syntax_node_type type, cmm_syntax_node_tag tags)
-{
-    cmm_syntax_node *node = (cmm_syntax_node *)malloc(sizeof(cmm_syntax_node));
-    node->type = type;
-    node->tags = tags;
-    node->info1 = NULL;
-    node->info2 = NULL;
-    node->next = NULL;
-    return node;
-}
-
 static cmm_syntax_node *pop_literal(token_quene *tokens, cmm_token_type test_type, cmm_syntax_node_type node_type)
 {
-    cmm_syntax_node *node = new_node(node_type, Value);
+    cmm_syntax_node *node = new_syntax_node(node_type, Value);
     node->value = test_and_pop_token(tokens, test_type);
     return node;
 }
@@ -113,7 +102,7 @@ static cmm_token_type peek_type(token_quene *tokens, int index)
 
 static cmm_syntax_node *parse_args(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(ValueArgs, Value);
+    cmm_syntax_node *node = new_syntax_node(ValueArgs, Value);
     node->info1 = parse_value(tokens);
     if (peek_type(tokens, 0) == Comma)
     {
@@ -125,7 +114,7 @@ static cmm_syntax_node *parse_args(token_quene *tokens)
 
 static cmm_syntax_node *parse_call(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(ValueCall, Value | Executable);
+    cmm_syntax_node *node = new_syntax_node(ValueCall, Value | Executable);
 
     node->value = test_and_pop_token(tokens, Identifier); // 函数名
     test_and_rm_token(tokens, LeftBracket); // (
@@ -159,7 +148,7 @@ static cmm_syntax_node *parse_direct_expr(token_quene *tokens)
     if (peek_type(tokens, 0) == Minus) // - value
     {
         test_and_rm_token(tokens, Minus);
-        cmm_syntax_node *node = new_node(ValueNegate, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueNegate, Value);
         node->info1 = parse_value(tokens);
         return node;
     }
@@ -186,7 +175,7 @@ static cmm_syntax_node *parse_expr_mul_div(token_quene *tokens)
     if (peek_type(tokens, 0) == Star)
     {
         test_and_rm_token(tokens, Star);
-        cmm_syntax_node *node = new_node(ValueMul, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueMul, Value);
         node->info1 = info1;
         node->info2 = parse_expr_mul_div(tokens);
         return node;
@@ -195,7 +184,7 @@ static cmm_syntax_node *parse_expr_mul_div(token_quene *tokens)
     if (peek_type(tokens, 0) == Slash)
     {
         test_and_rm_token(tokens, Slash);
-        cmm_syntax_node *node = new_node(ValueDiv, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueDiv, Value);
         node->info1 = info1;
         node->info2 = parse_expr_mul_div(tokens);
         return node;
@@ -211,7 +200,7 @@ static cmm_syntax_node *parse_expr_add_sub(token_quene *tokens)
     if (peek_type(tokens, 0) == Plus)
     {
         test_and_rm_token(tokens, Plus);
-        cmm_syntax_node *node = new_node(ValueAdd, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueAdd, Value);
         node->info1 = info1;
         node->info2 = parse_expr_add_sub(tokens);
         return node;
@@ -220,7 +209,7 @@ static cmm_syntax_node *parse_expr_add_sub(token_quene *tokens)
     if (peek_type(tokens, 0) == Minus)
     {
         test_and_rm_token(tokens, Minus);
-        cmm_syntax_node *node = new_node(ValueSub, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueSub, Value);
         node->info1 = info1;
         node->info2 = parse_expr_add_sub(tokens);
         return node;
@@ -236,7 +225,7 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
     if (peek_type(tokens, 0) == LessThan)
     {
         test_and_rm_token(tokens, LessThan);
-        cmm_syntax_node *node = new_node(ValueLess, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueLess, Value);
         node->info1 = info1;
         node->info2 = parse_expr_add_sub(tokens);
         return node;
@@ -245,7 +234,7 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
     if (peek_type(tokens, 0) == GreaterThan)
     {
         test_and_rm_token(tokens, GreaterThan);
-        cmm_syntax_node *node = new_node(ValueGreater, Value);
+        cmm_syntax_node *node = new_syntax_node(ValueGreater, Value);
         node->info1 = info1;
         node->info2 = parse_expr_add_sub(tokens);
         return node;
@@ -258,18 +247,18 @@ static cmm_syntax_node *parse_expr_compare(token_quene *tokens)
 
 static cmm_syntax_node *parse_assign(token_quene *tokens)
 {
-    cmm_syntax_node *info1 = parse_expr_compare(tokens);
-    
-    if (peek_type(tokens, 0) == Equal)
-    {
-        cmm_syntax_node *node = new_node(StatementAssign, Executable | Value);
+    // TODO: 指针和其他可赋值类型的支持
+    if (peek_type(tokens, 0) == Identifier && peek_type(tokens, 1) == Equal)
+    {    
+        cmm_syntax_node *info1 = pop_literal(tokens, Identifier ,ValueIdentifier);
+        cmm_syntax_node *node = new_syntax_node(StatementAssign, Executable | Value);
         node->info1 = info1;
         test_and_rm_token(tokens, Equal);
-        node->info2 = parse_assign(tokens);
+        node->info2 = parse_expr_compare(tokens);
         return node;
     }
     
-    return info1;
+    return parse_expr_compare(tokens);
 }
 
 static cmm_syntax_node *parse_indirect_expr(token_quene *tokens)
@@ -284,7 +273,7 @@ static cmm_syntax_node *parse_value(token_quene *tokens)
 
 static cmm_syntax_node *parse_block(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(BlockGeneral, ProgramBlock);
+    cmm_syntax_node *node = new_syntax_node(BlockGeneral, ProgramBlock);
     test_and_rm_token(tokens, LeftBrace);
 
     cmm_syntax_node *last = NULL;
@@ -308,7 +297,7 @@ static cmm_syntax_node *parse_block(token_quene *tokens)
 
 static cmm_syntax_node *parse_if(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(StatementIf, Executable);
+    cmm_syntax_node *node = new_syntax_node(StatementIf, Executable);
 
     test_and_rm_token(tokens, If);
     test_and_rm_token(tokens, LeftBracket);
@@ -324,7 +313,7 @@ static cmm_syntax_node *parse_if(token_quene *tokens)
 
 static cmm_syntax_node *parse_return(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(StatementReturn, Executable);
+    cmm_syntax_node *node = new_syntax_node(StatementReturn, Executable);
     test_and_rm_token(tokens, Return);
     node->info1 = parse_value(tokens);
     test_and_rm_token(tokens, EOL);
@@ -348,7 +337,7 @@ static cmm_syntax_node *parse_value_statement(token_quene *tokens)
 
 static cmm_syntax_node *parse_variable_def(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(StatementVarDef, Executable);
+    cmm_syntax_node *node = new_syntax_node(StatementVarDef, Executable);
     node->info1 = pop_literal(tokens, Identifier, ValueIdentifier);
     node->value = test_and_pop_token(tokens, Identifier);
 
@@ -364,7 +353,7 @@ static cmm_syntax_node *parse_variable_def(token_quene *tokens)
 
 static cmm_syntax_node *parse_args_def(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(ValueArgs, Value);
+    cmm_syntax_node *node = new_syntax_node(ValueArgs, Value);
     node->info1 = pop_literal(tokens, Identifier, ValueIdentifier);
     node->value = test_and_pop_token(tokens, Identifier);
 
@@ -379,7 +368,7 @@ static cmm_syntax_node *parse_args_def(token_quene *tokens)
 
 static cmm_syntax_node *parse_func_def(token_quene *tokens)
 {
-    cmm_syntax_node *node = new_node(StatementFuncDef, Executable);
+    cmm_syntax_node *node = new_syntax_node(StatementFuncDef, Executable);
     node->info1 = pop_literal(tokens, Identifier, ValueIdentifier); // 返回值
     node->value = test_and_pop_token(tokens, Identifier); // 函数名
     test_and_rm_token(tokens, LeftBracket);

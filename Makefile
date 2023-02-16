@@ -4,6 +4,9 @@ INCLUDE_DIR = ./include
 BUILD_SRC_DIR = $(BUILD_DIR)/src
 BUILD_LIB_DIR = $(BUILD_DIR)/lib
 
+LIB_SC = ./lib/sc
+LIB_SC_MAP = $(LIB_SC)/map
+
 TEST_DIR = ./tests
 TEST_BUILD_DIR = $(TEST_DIR)/build
 
@@ -64,6 +67,14 @@ syntax_tree_test:
 	@echo "\n"
 	@echo "diff:"
 	@diff $(TEST_BUILD_DIR)/syntax_tree_test/origin_output.txt $(TEST_BUILD_DIR)/syntax_tree_test/target_output.txt
+
+runtime:
+	@make syntax_tree
+	@mkdir -p $(BUILD_SRC_DIR)
+	@gcc cmm_runtime.c -Wall -Werror -g -Og -o $(BUILD_DIR)/cmm_runtime -I$(INCLUDE_DIR)\
+	 -L$(BUILD_LIB_DIR) -lsyntax_tree -Wl,-rpath=$(BUILD_LIB_DIR)\
+	 -L$(LIB_SC_MAP) -lsc_map  -Wl,-rpath=$(LIB_SC_MAP)
+	@echo "runtime build success"
 
 clean:
 	@rm -rf $(BUILD_DIR)

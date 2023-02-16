@@ -1,3 +1,4 @@
+# input()
 print('''
 dynamic abs(int value)
 {

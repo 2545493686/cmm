@@ -183,3 +183,28 @@ void cmm_syntax_tree_output_debug_style(cmm_syntax_node *node)
     syntax_tree_output_debug_style(node, 0);
     printf("\n");
 }
+
+cmm_syntax_node *new_syntax_node(cmm_syntax_node_type type, cmm_syntax_node_tag tags)
+{
+    cmm_syntax_node *node = (cmm_syntax_node *)malloc(sizeof(cmm_syntax_node));
+    node->type = type;
+    node->tags = tags;
+    node->info1 = NULL;
+    node->info2 = NULL;
+    node->next = NULL;
+    return node;
+}
+
+void free_syntax_node(cmm_syntax_node *node)
+{
+    if (node = NULL)
+    {
+        return;
+    }
+    
+    free(node->value);
+    free_syntax_node(node->info1);
+    free_syntax_node(node->info2);
+    free_syntax_node(node->next);
+    free(node);
+}
